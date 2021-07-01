@@ -15,7 +15,24 @@ const Home = () => {
   const [chatHistory, setChatHistory] = useState<Message[]>([])
   const [isLoggedIn, setIsLoggedIn] = useState(false)
 
+  const checkOnlineUsers = async () => {
+    try {
+      const response = await fetch(ADDRESS + '/online-users')
+      const users = await response.json()
+      console.log('users', users)
+      setOnlineUsers(users.onlineUsers)
+    } catch (error) {
+      console.log(error)
+    }
+  }
+
   useEffect(() => {
+    // this is happening just once
+    // but I'm setting up event listeners just once!
+    // they will live for the lifetime of the chat
+
+    console.log("I'm setting the event listeners!")
+
     socket.on('connect', () => {
       // with on we're listening for an event
       console.log(socket.id)
@@ -24,6 +41,16 @@ const Home = () => {
     socket.on('loggedin', () => {
       console.log("Now you're successfully logged in!")
       setIsLoggedIn(true)
+      checkOnlineUsers()
+    })
+
+    socket.on('newConnection', () => {
+      console.log('newConnection event, someone got in!')
+      checkOnlineUsers()
+    })
+
+    socket.on('message', (message: Message) => {
+      setChatHistory((oldChatHistory) => [...oldChatHistory, message])
     })
   }, [])
 
@@ -33,6 +60,20 @@ const Home = () => {
     // with emit we're sending an event to the server
     // now the server is allowing us to send messages
     // and will emit an event for us! it's called 'loggedin'
+  }
+
+  const sendMessage = (e: FormEvent) => {
+    e.preventDefault()
+    const messageToSend = {
+      text: currentMessage,
+      id: socket.id,
+      sender: userName,
+      timestamp: Date.now(),
+    }
+    socket.emit('sendmessage', messageToSend)
+
+    setChatHistory([...chatHistory, messageToSend])
+    setCurrentMessage('')
   }
 
   // applications loads, I establish the connection with the server, I receive a "connect" event
@@ -70,7 +111,7 @@ const Home = () => {
               </li>
             ))}
           </ul>
-          <Form>
+          <Form onSubmit={sendMessage}>
             <Form.Control
               placeholder="Write a message"
               value={currentMessage}
@@ -84,7 +125,7 @@ const Home = () => {
           <div>Connected users</div>
           <ListGroup>
             {onlineUsers.map((user) => (
-              <ListGroup.Item key={user.id}>{user.userName}</ListGroup.Item>
+              <ListGroup.Item key={user.id}>{user.username}</ListGroup.Item>
             ))}
           </ListGroup>
         </Col>
