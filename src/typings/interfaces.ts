@@ -1,6 +1,9 @@
+export type Room = "red" | "blue"
+
 export interface User {
   username: string
   id: string
+  room: Room
 }
 
 export interface Message {

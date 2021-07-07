@@ -1,6 +1,6 @@
 import { useState, useEffect, ChangeEvent, FormEvent } from 'react'
-import { Container, Col, Row, Form, ListGroup } from 'react-bootstrap'
-import { Message, User } from '../typings/interfaces'
+import { Container, Col, Row, Form, ListGroup, Button } from 'react-bootstrap'
+import { Room, Message, User } from '../typings/interfaces'
 import { io } from 'socket.io-client'
 
 const ADDRESS = 'http://localhost:3030'
@@ -14,6 +14,7 @@ const Home = () => {
   const [onlineUsers, setOnlineUsers] = useState<User[]>([])
   const [chatHistory, setChatHistory] = useState<Message[]>([])
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [room, setRoom] = useState<Room>("blue")
 
   const checkOnlineUsers = async () => {
     try {
@@ -52,11 +53,25 @@ const Home = () => {
     socket.on('message', (message: Message) => {
       setChatHistory((oldChatHistory) => [...oldChatHistory, message])
     })
+
+    return () => {
+      console.log('Disconnecting...')
+      socket.disconnect()
+    }
   }, [])
+
+  const getChatHistory = async (room: Room) => {
+    const response = await fetch(`${ADDRESS}/room/${room}`)
+    const { chatHistory } = await response.json()
+
+    setChatHistory(chatHistory)
+  }
 
   const handleUsernameSubmit = (e: FormEvent) => {
     e.preventDefault()
-    socket.emit('setUsername', { username: userName })
+    socket.emit('setUsername', { username: userName, room: room })
+
+    getChatHistory(room)
     // with emit we're sending an event to the server
     // now the server is allowing us to send messages
     // and will emit an event for us! it's called 'loggedin'
@@ -70,7 +85,7 @@ const Home = () => {
       sender: userName,
       timestamp: Date.now(),
     }
-    socket.emit('sendmessage', messageToSend)
+    socket.emit('sendMessage', { message: messageToSend, room })
 
     setChatHistory([...chatHistory, messageToSend])
     setCurrentMessage('')
@@ -86,18 +101,31 @@ const Home = () => {
   // 1) how to send messages?
   // 2) how to gracefully disconnect
 
+  console.log(onlineUsers)
+
+  const toggleRoom = () => {
+    setRoom(r => r === "blue" ? "red" : "blue")
+  }
+
+
+
   return (
     <Container fluid className="px-4">
       <Row className="my-3" style={{ height: '95vh' }}>
         <Col md={10} className="d-flex flex-column justify-content-between">
           {/* MAIN CHAT VIEW */}
-          <Form onSubmit={handleUsernameSubmit}>
+          <Form onSubmit={handleUsernameSubmit} className="d-flex">
             <Form.Control
               placeholder="Insert your name"
               value={userName}
               disabled={isLoggedIn}
               onChange={(e: ChangeEvent<HTMLInputElement>) => setUserName(e.target.value)}
             />
+            <Button
+              className="ml-2"
+              variant={room === "blue" ? "primary" : "danger"}
+              onClick={!isLoggedIn ? toggleRoom : () => { }}
+            >Room</Button>
           </Form>
           <ul>
             {chatHistory.map((message) => (
@@ -124,7 +152,7 @@ const Home = () => {
           {/* CONNECTED USERS */}
           <div>Connected users</div>
           <ListGroup>
-            {onlineUsers.map((user) => (
+            {onlineUsers.filter(u => u.id !== socket.id && u.room === room).map((user) => (
               <ListGroup.Item key={user.id}>{user.username}</ListGroup.Item>
             ))}
           </ListGroup>
